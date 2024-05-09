@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Assessing Campaign Performance Using Chi-Square Test For Independence
-image: "/posts/primes_image.jpeg"
+image: "/posts/sales-promotion-types.jpeg"
 tags: [Python, Chi-Square, p-value, acceptance criteria, critical value, null hypothesis, alternate hypothesis ]
 ---
 
