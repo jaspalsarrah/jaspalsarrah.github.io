@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Predicting Customer Loyalty Using Machine Learning
-image: "/posts/sales-promotion-types.jpeg"
+image: "/posts/supermarket_loyalty_image.jpeg"
 tags: [Python, Machine Learning, Decision Tree, Random Forest, Regression]
 ---
 
