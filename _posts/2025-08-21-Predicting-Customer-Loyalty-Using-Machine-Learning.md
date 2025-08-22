@@ -123,18 +123,87 @@ r_squared = r2_score(y_test, y_pred)
 print(r_squared)
 >>> 0.9598617481534647
 ```
+To check the accuracy of the r2 value I ran a cross validation technique and this showed the scores were not too disimilar.
 
 ```ruby
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2)
->>> As our p-value of 0.16351152223398197 is higher than out acceptance criteria of 0.05 - we retain the null hypothesis, and conclude that: There is no relationship between mailer type and sign up rate. They are independent
+cv_object = KFold(n_splits = 4, shuffle = True)
+cv_scores = cross_val_score(regressor, X_train, y_train, cv = cv_object, scoring = "r2")
+cv_scores.mean()
+>>> 0.9248592219288347
 ```
+As we are using multiple input variables I calculated the adjusted r2 score to take that into account.
 
 ```ruby
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2)
->>> As our p-value of 0.16351152223398197 is higher than out acceptance criteria of 0.05 - we retain the null hypothesis, and conclude that: There is no relationship between mailer type and sign up rate. They are independent
+num_data_points, num_input_vars = X_test.shape
+adjusted_r_squared = 1 -(1-r_squared) * (num_data_points -1) / (num_data_points - num_input_vars - 1)
+print(adjusted_r_squared)
+>>> As our adjusted r2 score of 0.9552745193710035 there is not much difference.
 ```
+Next I checked the impact of each input variable on our model
 
 ```ruby
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2)
->>> As our p-value of 0.16351152223398197 is higher than out acceptance criteria of 0.05 - we retain the null hypothesis, and conclude that: There is no relationship between mailer type and sign up rate. They are independent
+feature_importance = pd.DataFrame(regressor.feature_importances_)
+feature_names = pd.DataFrame(X.columns)
+feature_importance_summary = pd.concat([feature_names,feature_importance], axis = 1)
+feature_importance_summary.columns = ["input_variable", "feature_importance"]
+feature_importance_summary.sort_values(by = "feature_importance", inplace = True)
+
+plt.barh(feature_importance_summary["input_variable"],feature_importance_summary["feature_importance"])
+plt.title("Feature importance of Random Forest")
+plt.xlabel("Feature Importance")
+plt.show()
+>>> The image shows that distance from store is the most important feature for predicting loyalty scores. <img width="939" height="563" alt="image" src="https://github.com/user-attachments/assets/3ffdbfc4-3df5-4e01-b8c8-3d2f82550358" />
 ```
+Next I used the permuation importance technique, which measures how much a model's performance metric decreases when the values of a specific feature are randomly shuffled. This disruption breaks the relationship between the feature and the target variable, allowing us to assess the feature's contribution to the model's predictive power.
+
+```ruby
+result = permutation_importance(regressor, X_test, y_test, n_repeats = 10, random_state = 42)
+print(result)
+
+permutation_importance = pd.DataFrame(result["importances_mean"])
+feature_names = pd.DataFrame(X.columns)
+permutation_importance_summary = pd.concat([feature_names,permutation_importance], axis = 1)
+permutation_importance_summary.columns = ["input_variable", "permutation_importance"]
+permutation_importance_summary.sort_values(by = "permutation_importance", inplace = True)
+
+plt.barh(permutation_importance_summary["input_variable"],permutation_importance_summary["permutation_importance"])
+plt.title("Permutation importance of Random Forest")
+plt.xlabel("Permutation Importance")
+plt.show()
+>>> The plot shows a slight difference where total_sales is considered to have a bit more of an impact but verifies that distance from store is the most significant metric in predicting loyalty score. In fact this technique has show it is more impactful. <img width="936" height="563" alt="image" src="https://github.com/user-attachments/assets/f4e38b36-eeb3-40aa-a9d6-17f5e6621888" />
+```
+The model and objects were then saved to use later for predicting loyalty scores.
+
+```ruby
+pickle.dump(regressor, open("data/random_forest_regression_model.p", "wb"))
+pickle.dump(one_hot_encoder, open("data/random_forest_regression_ohe.p", "wb"))
+```
+Now with the model trained we are ready to predict customer loyalty scores. The dataset was first imported as well as our model and model objects.
+
+```ruby
+to_be_scored = pickle.load(open("data/abc_regression_scoring.p", "rb"))
+regressor = pickle.load(open("data/random_forest_regression_model.p", "rb"))
+one_hot_encoder = pickle.load(open("data/random_forest_regression_ohe.p", "rb"))
+```
+Any unused columns and missing data was dropped.
+
+```ruby
+to_be_scored.drop(["customer_id"], axis = 1, inplace = True)
+to_be_scored.dropna(how = "any", inplace = True)
+```
+One hot encoding was applied to the dataset
+
+```ruby
+categorical_vars = ["gender"]
+encoder_vars_array = one_hot_encoder.transform(to_be_scored[categorical_vars])
+encoder_feature_names = one_hot_encoder.get_feature_names_out(categorical_vars)
+encoder_vars_df = pd.DataFrame(encoder_vars_array, columns = encoder_feature_names)
+to_be_scored = pd.concat([to_be_scored.reset_index(drop=True), encoder_vars_df.reset_index(drop=True)], axis=1)
+to_be_scored.drop(categorical_vars, axis=1, inplace=True)
+```
+Finally the model was used on our dataset to make predictions.
+
+```ruby
+loyalty_predictions = regressor.predict(to_be_scored)
+```
+These scores could now be tagged to the respective customer id's and back into the database for either marketing purposes or just to gain an understanding of the customers.
