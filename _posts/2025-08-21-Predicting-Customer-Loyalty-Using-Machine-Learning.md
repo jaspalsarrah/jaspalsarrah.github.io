@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Assessing Campaign Performance Using Chi-Square Test For Independence
+title: Predicting Customer Loyalty Using Machine Learning
 image: "/posts/sales-promotion-types.jpeg"
 tags: [Python, Machine Learning, Decision Tree, Random Forest, Regression]
 ---
