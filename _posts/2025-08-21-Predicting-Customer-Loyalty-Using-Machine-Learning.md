@@ -131,13 +131,13 @@ cv_scores = cross_val_score(regressor, X_train, y_train, cv = cv_object, scoring
 cv_scores.mean()
 >>> 0.9248592219288347
 ```
-As we are using multiple input variables I calculated the adjusted r2 score to take that into account.
+As we are using multiple input variables I calculated the adjusted r2 score. This compensates for the addition of input variables and only increases if the variable improves the model above what would be obtained by probability.
 
 ```ruby
 num_data_points, num_input_vars = X_test.shape
 adjusted_r_squared = 1 -(1-r_squared) * (num_data_points -1) / (num_data_points - num_input_vars - 1)
 print(adjusted_r_squared)
->>> As our adjusted r2 score of 0.9552745193710035 there is not much difference.
+>>> As our adjusted r2 score of 0.9552745193710035 shows that our model if fit for purpose.
 ```
 Next I checked the impact of each input variable on our model
 
