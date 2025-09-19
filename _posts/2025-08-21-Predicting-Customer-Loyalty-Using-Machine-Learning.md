@@ -227,8 +227,9 @@ regressor.intercept_
 >>> 0.5160974174646146
 ```
 
+Next I will be applying the Decision Tree algorithm to the same dataset and assess the model accuracy. Note that there is no need to remove outliers as this model is not impacted by them in the way Linear Regreesion would be.
 
-I will be using Random Forests for Regression to predict loyalty scores. The following packages will be imported to build the model.
+Simlarly I will import the required packages.
 
 ```ruby
 from sklearn.ensemble import RandomForestRegressor
@@ -238,62 +239,184 @@ from sklearn.metrics import r2_score
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.inspection import permutation_importance
 ```
+I will import the dataset and carry out the same preparation I did for the Linear Regression model earlier.
 
-Next I imported the customer dataset created earlier.
-
+Import and shuffle data
 ```ruby
 data_for_model = pickle.load(open("data/abc_regression_modelling.p", "rb"))
 data_for_model.drop("customer_id", axis=1, inplace=True)
-```
-The data was shuffled in case it is ordered and has an impact on the model  
 
-```ruby
 data_for_model = shuffle(data_for_model)
 ```
-The dataset was then split into input and output variable(s). As we are predicitng the customer loyalty score this is our output variable and is represented by y. All other fields will form part of the input variables and are represented by X.
+Drop any missing values as there are a very small amount.
+
+```ruby
+data_for_model.dropna(how="any", inplace=True)
+```
+Split the input and output variables.
 
 ```ruby
 X = data_for_model.drop(["customer_loyalty_score"], axis=1)
 y = data_for_model["customer_loyalty_score"]
 ```
-
-The datasets are then split into training and test sets where the test size represents the percentage of data for test set. In this case there is a 80-20 split between training and test.
+Split our Training and Test sets.
 
 ```ruby
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2,)
 ```
-Random Forest typically requires numerical input data. One hot encoding will be used to handle one of the input variables (gender) which is categorical. This method will allocate a numerical value depending on whether the customer is male (1) or female (0) and drop the gender column. Note that there is not a separate column where female is represented by 1 and male by 0. This has been dropped to eliminate issue of multi-collinearity.
+Deal with categorical variables.
 
 ```ruby
 categorical_vars = ["gender"]
 
-one_hot_encoder = OneHotEncoder(sparse_output=False, drop = "first") 
+one_hot_encoder = OneHotEncoder(sparse_output=False, drop = "first")
 
-X_train_encoded = one_hot_encoder.fit_transform(X_train[categorical_vars])
+X_train_encoded = one_hot_encoder.fit_transform(X_train[categorical_vars])  
 X_test_encoded = one_hot_encoder.transform(X_test[categorical_vars])
 
 encoder_feature_names = one_hot_encoder.get_feature_names_out(categorical_vars)
 
 X_train_encoded = pd.DataFrame(X_train_encoded, columns = encoder_feature_names)
-X_train = pd.concat([X_train.reset_index(drop=True), X_train_encoded.reset_index(drop=True)], axis=1)   #axis=1 means we are looking at columns
-X_train.drop(categorical_vars, axis=1, inplace=True) #Drops Categorical variable columns
+X_train = pd.concat([X_train.reset_index(drop=True), X_train_encoded.reset_index(drop=True)], axis=1)
+X_train.drop(categorical_vars, axis=1, inplace=True)
 
 X_test_encoded = pd.DataFrame(X_test_encoded, columns = encoder_feature_names)
-X_test = pd.concat([X_test.reset_index(drop=True), X_test_encoded.reset_index(drop=True)], axis=1)   #axis=1 means we are looking at columns
-X_test.drop(categorical_vars, axis=1, inplace=True) #Drops Categorical variable columns
+X_test = pd.concat([X_test.reset_index(drop=True), X_test_encoded.reset_index(drop=True)], axis=1)
+X_test.drop(categorical_vars, axis=1, inplace=True)
 ```
-Next I will train the model
+Next I will calculate the ideal depth for the decision tree. Note that a higher depth will be prone to having a model that is overfitting and not able to generalise. This would lead to poor predictions.
 
 ```ruby
-regressor = RandomForestRegressor(random_state = 42)
+max_depth_list = list(range(1,9))
+accuracy_scores = []
+
+for depth in max_depth_list:
+    regressor = DecisionTreeRegressor(max_depth = depth, random_state = 42)
+    regressor.fit(X_train, y_train)
+    y_pred = regressor.predict(X_test)
+    accuracy = r2_score(y_test, y_pred)
+    accuracy_scores.append(accuracy)
+
+max_accuracy = max(accuracy_scores)
+max_accuracy_idx = accuracy_scores.index(max_accuracy)
+optimal_depth = max_depth_list[max_accuracy_idx]
+>>> 7
+```
+The value of 7 is optimal but if I want my model generalise a lower value would be better. Looking at the accuracy scores for different depths we can see at around 4 the scores begin to level off. Therefore, for training my Decision Tree model I have opted to use this.
+
+```ruby
+regressor = DecisionTreeRegressor(max_depth = 4) 
 regressor.fit(X_train, y_train)
 ```
-We can now predict on the test set
+This model will now be used to predict the customer loyalty scores.
 
 ```ruby
 y_pred = regressor.predict(X_test)
 ```
-Using the output test and predictions I will determine the r2 value
+I will now assess the model using r2, cross validation and adjusted r2.
+
+```ruby
+r_squared = r2_score(y_test, y_pred)
+print(r_squared)
+
+cv_object = KFold(n_splits = 4, shuffle = True, random_state = 42)
+cv_scores = cross_val_score(regressor, X_train, y_train, cv = cv_object, scoring = "r2")
+cv_scores.mean()
+
+num_data_points, num_input_vars = X_test.shape
+adjusted_r_squared = 1 -(1-r_squared) * (num_data_points -1) / (num_data_points - num_input_vars - 1)
+print(adjusted_r_squared)
+>>> 0.8941316438857448
+>>> 0.8046471635623549
+>>> 0.8820324031869728
+```
+From the output we can see a slight drop from r2 to adjusted r2, which means the r2 is reliable and the addition of input variables has not impacted the model.
+You will also note that in comparison to the Linear regression model the r2 scored value is higher, implying the decision tree is a more accurate model than linear regression based on our data.
+
+Plotting the model allows us to see the nodes of decision tree and the various splits. The diagram shows the distance from store at the top of the decision tree, which like the Linear regression models highlights its importance as a factor.
+
+```ruby
+plt.figure(figsize=(25,15))
+tree = plot_tree(regressor,
+                 feature_names = X.columns,
+                 filled = True,
+                 rounded = True,
+                 fontsize = 16)
+```
+
+For the final model I will be apllying the Random Forest and assessing its output against the previous two models. Similar to Decision Trees, there is no need to remove outliers as this model is not impacted by them.
+
+First I will import the required packages.
+
+```ruby
+import pandas as pd
+import pickle
+import matplotlib.pyplot as plt
+
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.utils import shuffle
+from sklearn.model_selection import train_test_split, cross_val_score, KFold
+from sklearn.metrics import r2_score
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.inspection import permutation_importance
+```
+Like the previous two models, I will import and shuffle the data.
+
+Import and shuffle data
+```ruby
+data_for_model = pickle.load(open("data/abc_regression_modelling.p", "rb"))
+data_for_model.drop("customer_id", axis=1, inplace=True)
+
+data_for_model = shuffle(data_for_model)
+```
+Drop any missing values as there are a very small amount.
+
+```ruby
+data_for_model.dropna(how="any", inplace=True)
+```
+Split the input and output variables.
+
+```ruby
+X = data_for_model.drop(["customer_loyalty_score"], axis=1)
+y = data_for_model["customer_loyalty_score"]
+```
+Split our Training and Test sets.
+
+```ruby
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2,)
+```
+Deal with categorical variables.
+
+```ruby
+categorical_vars = ["gender"]
+
+one_hot_encoder = OneHotEncoder(sparse_output=False, drop = "first")
+
+X_train_encoded = one_hot_encoder.fit_transform(X_train[categorical_vars])  
+X_test_encoded = one_hot_encoder.transform(X_test[categorical_vars])
+
+encoder_feature_names = one_hot_encoder.get_feature_names_out(categorical_vars)
+
+X_train_encoded = pd.DataFrame(X_train_encoded, columns = encoder_feature_names)
+X_train = pd.concat([X_train.reset_index(drop=True), X_train_encoded.reset_index(drop=True)], axis=1)
+X_train.drop(categorical_vars, axis=1, inplace=True)
+
+X_test_encoded = pd.DataFrame(X_test_encoded, columns = encoder_feature_names)
+X_test = pd.concat([X_test.reset_index(drop=True), X_test_encoded.reset_index(drop=True)], axis=1)
+X_test.drop(categorical_vars, axis=1, inplace=True)
+```
+Next I will train the model
+
+```ruby
+regressor = RandomForestRegressor()
+regressor.fit(X_train, y_train)
+```
+We can now assess the model. First we will use the model to predict the scores.
+
+```ruby
+y_pred = regressor.predict(X_test)
+```
+Calculate the r2 value
 ```ruby
 r_squared = r2_score(y_test, y_pred)
 print(r_squared)
@@ -315,6 +438,7 @@ adjusted_r_squared = 1 -(1-r_squared) * (num_data_points -1) / (num_data_points 
 print(adjusted_r_squared)
 >>> As our adjusted r2 score of 0.9552745193710035 shows that our model if fit for purpose.
 ```
+These values are higher than the Linear Regression and Decision Tree models. 
 Next I checked the impact of each input variable on our model
 
 ```ruby
@@ -346,15 +470,15 @@ plt.barh(permutation_importance_summary["input_variable"],permutation_importance
 plt.title("Permutation importance of Random Forest")
 plt.xlabel("Permutation Importance")
 plt.show()
->>> The plot shows a slight difference where total_sales is considered to have a bit more of an impact but verifies that distance from store is the most significant metric in predicting loyalty score. In fact this technique has show it is more impactful. <img width="936" height="563" alt="image" src="https://github.com/user-attachments/assets/f4e38b36-eeb3-40aa-a9d6-17f5e6621888" />
+>>> The plot shows a slight difference where total_sales is considered to have a bit more of an impact but verifies that distance from store is the most significant metric in predicting loyalty score. In fact this technique has show it is more impactful.
 ```
-The model and objects were then saved to use later for predicting loyalty scores.
+As Random Forest is the most accurate model, the regressor and OneHotEncoder objects for this model will be saved using pickle to predict missing loyalty scores.
 
 ```ruby
 pickle.dump(regressor, open("data/random_forest_regression_model.p", "wb"))
 pickle.dump(one_hot_encoder, open("data/random_forest_regression_ohe.p", "wb"))
 ```
-Now with the model trained we are ready to predict customer loyalty scores. The dataset was first imported as well as our model and model objects.
+Now with the model trained we are ready to predict customer loyalty scores. The dataset with missing loyalty scores and Random Forest model objects were imported.
 
 ```ruby
 to_be_scored = pickle.load(open("data/abc_regression_scoring.p", "rb"))
@@ -382,4 +506,4 @@ Finally the model was used on our dataset to make predictions.
 ```ruby
 loyalty_predictions = regressor.predict(to_be_scored)
 ```
-These scores could now be tagged to the respective customer id's and back into the database for either marketing purposes or just to gain an understanding of the customers.
+These scores can now be tagged to the respective customer id's and back into the database for either marketing purposes or just to gain an understanding of the customers.
