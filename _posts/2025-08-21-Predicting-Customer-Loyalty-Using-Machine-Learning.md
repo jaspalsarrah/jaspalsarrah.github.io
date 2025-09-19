@@ -1,15 +1,19 @@
 ---
 layout: post
-title: Predicting Customer Loyalty Using Machine Learning
+title: Predicting Customer Loyalty Using Regression techniques
 image: "/posts/supermarket_loyalty_image.jpg"
 tags: [Python, Machine Learning, Decision Tree, Random Forest, Regression]
 ---
 
-In this post I'm going to using Machine Learning to predict customer loyalty scores based on the information we know about the customer.
+In this post I'm going to be using machine learning algorithms Linear Regression, Decision Trees and Random Forest Trees to find an accurate model to predict customer loyalty scores based on the information we know about the customer.
 
 ---
 
-First I will import the required packages 
+First I will create a dataset that is at customer level and customer loyalty score as well as key features I believe will help predict the customer loyalty score.
+
+---
+
+First I will import the required packages. I have chosen pickle as it can save and load objects specific to Python.
 
 ```ruby
 import pandas as pd
@@ -38,7 +42,7 @@ sales_summary["average_basket_value"] = sales_summary["total_sales"] / sales_sum
 data_for_regression = pd.merge(data_for_regression, sales_summary, how = "inner", on = "customer_id")
 ```
 
-The single dataset data_for_regression will now be split into those with loyalty scores and those without.
+The single dataset data_for_regression will now be split into those with loyalty scores and those without. The models will be built on the former and if accurate used on the latter.
 
 ```ruby
 regression_modelling = data_for_regression.loc[data_for_regression["customer_loyalty_score"].notna()]
@@ -46,12 +50,184 @@ regression_scoring = data_for_regression.loc[data_for_regression["customer_loyal
 regression_scoring.drop(["customer_loyalty_score"], axis = 1, inplace = True)
 ```
 
-Any objects/models for use later using the pickle module.
+Next I will save the objects using pickle so that when building models they can be imported and used directly.
 
 ```ruby
 pickle.dump(regression_modelling, open("data/abc_regression_modelling.p", "wb"))    
 pickle.dump(regression_scoring, open("data/abc_regression_scoring.p", "wb"))
 ```
+The first model I will build and assess is a Linear Regression model using the following packages.
+
+```ruby
+import pandas as pd
+import pickle
+import matplotlib.pyplot as plt
+
+from sklearn.linear_model import LinearRegression
+from sklearn.utils import shuffle
+from sklearn.model_selection import train_test_split, cross_val_score, KFold
+from sklearn.metrics import r2_score
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.feature_selection import RFECV
+```
+Next I imported the customer dataset created earlier. As customer_id is not an input variable and will have no impact in predicting the customer loyalty score this will be dropped.
+
+```ruby
+data_for_model = pickle.load(open("data/abc_regression_modelling.p", "rb"))
+data_for_model.drop("customer_id", axis=1, inplace=True)
+```
+I will also shuffle the data to ensure there is no ordering, which may or may not have an impact on the model.
+
+```ruby
+data_for_model = shuffle(data_for_model)
+```
+Next I will be going through a series of data preparation steps, beginning with missing values. These can be identified as follows.
+
+```ruby
+data_for_model.isna().sum()
+>>> distance_from_store       2
+>>> gender                    3
+>>> credit_score              2
+```
+As there are a low number of missing values I will not use imputation and drop the rows with missing data.
+
+```ruby
+data_for_model.dropna(how="any", inplace=True)
+```
+Linear regression model can be affected significantly with outliers. We can get a high level overview using the following code.
+
+```ruby
+outlier_investigation = data_for_model.describe()
+```
+The table shows some extreme values in distance_from_store, total_sales and total_items. So using the boxplot approach these will be removed. The code below informs us of how many were removed.
+
+```ruby
+for column in outlier_columns:
+    lower_quartile = data_for_model[column].quantile(0.25)
+    upper_quartile = data_for_model[column].quantile(0.75)
+    iqr = upper_quartile - lower_quartile
+    iqr_extended = iqr * 2  # Changed to 2 to stop eliminating too many
+    min_border = lower_quartile - iqr_extended
+    max_border = upper_quartile + iqr_extended
+    
+    outliers = data_for_model[(data_for_model[column] < min_border) | (data_for_model[column] > max_border)].index
+    print(f"{len(outliers)} outliers detected in column {column}")
+    
+    data_for_model.drop(outliers, inplace = True)
+>>> 2 outliers detected in column distance_from_store
+>>> 23 outliers detected in column total_sales
+>>> 0 outliers detected in column total_items
+```
+The final preparation step is to split the data into the input variables and output variable.
+
+```ruby
+X = data_for_model.drop(["customer_loyalty_score"], axis=1)
+y = data_for_model["customer_loyalty_score"]
+```
+The X and y datasets can now be split into training and test sets. In order for our model to learn we need as much training data as possible. Therefore, I have used a 80-20 split.
+
+```ruby
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2)
+```
+The data has a categorical data input variable called gender. I will use One Hot Encoding to deal with this variable so it uses binary option. You will note that I have dropped the first encoded column as two will be produced to avoid the dummy trap variable. I have also ensured the encoding rules learnt on the training data are applied to the test data rather than learned on each new set of data. This ensures the rules will be the same rather than different each time. The code below will replace the gender column with gender_m having a binary value of 0 or 1.
+
+```ruby
+categorical_vars = ["gender"]
+
+one_hot_encoder = OneHotEncoder(sparse_output=False, drop = "first")
+
+X_train_encoded = one_hot_encoder.fit_transform(X_train[categorical_vars])  
+X_test_encoded = one_hot_encoder.transform(X_test[categorical_vars])
+
+encoder_feature_names = one_hot_encoder.get_feature_names_out(categorical_vars)
+
+X_train_encoded = pd.DataFrame(X_train_encoded, columns = encoder_feature_names)
+X_train = pd.concat([X_train.reset_index(drop=True), X_train_encoded.reset_index(drop=True)], axis=1)
+X_train.drop(categorical_vars, axis=1, inplace=True)
+
+X_test_encoded = pd.DataFrame(X_test_encoded, columns = encoder_feature_names)
+X_test = pd.concat([X_test.reset_index(drop=True), X_test_encoded.reset_index(drop=True)], axis=1)
+X_test.drop(categorical_vars, axis=1, inplace=True)
+```
+Next I will apply Feature Selection by using Recursive Feature Elimination with Cross Validation to find the optimal number of inputs for the training the model. The code below will find the optimal number and drop the rest. In this particular situation the process selected all 8 input variables.
+
+```ruby
+regressor = LinearRegression()
+feature_selector = RFECV(regressor)
+
+fit = feature_selector.fit(X_train,y_train)
+
+optimal_feature_count = feature_selector.n_features_
+print(f"Optimal number of features: {optimal_feature_count}")
+
+X_train = X_train.loc[:, feature_selector.get_support()]
+X_test = X_test.loc[:, feature_selector.get_support()]
+
+
+plt.plot(range(1, len(fit.cv_results_['mean_test_score']) + 1), fit.cv_results_['mean_test_score'], marker = "o")
+plt.ylabel("Model Score")
+plt.xlabel("Number of Features")
+plt.title(f"Feature Selection using RFE \n Optimal number of features is {optimal_feature_count} (at score of {round(max(fit.cv_results_['mean_test_score']),4)})")
+plt.tight_layout()
+plt.show()
+>>> Optimal number of features: 8
+```
+Now we are ready to train the model, which can be done using the following.
+
+```ruby
+regressor = LinearRegression()
+regressor.fit(X_train, y_train)
+```
+We are now ready to assess the model by using it on the test set to predict customer loyalty scores. 
+
+```ruby
+# Predict on Test Set
+y_pred = regressor.predict(X_test)
+```
+These predictions can then be assessed against the actual customer loyalty scores by calculating r2
+
+```ruby
+r_squared = r2_score(y_test, y_pred)
+print(r_squared)
+>>> 0.7805702910327409
+```
+Whilst the model score looks promising it is useful to apply cross validation technique. This is to ensure the model is generalising well and not overfitting. 
+
+```ruby
+cv_object = KFold(n_splits = 4, shuffle = True)
+cv_scores = cross_val_score(regressor, X_train, y_train, cv = cv_object, scoring = "r2")
+cv_scores.mean()
+>>> 0.8532327536589753
+```
+This higher value probably shows how initial test/train split was not entriely representative of the data.
+
+At this stage it is also worth calculating the adjusted r2 score. This gives a fairer representation as for every input variable added to the model will increase the r2 score. The adjusted score takes this into account. As you can see it is slightly lower than r2, which is to be expected but still a good score.
+
+```ruby
+num_data_points, num_input_vars = X_test.shape
+adjusted_r_squared = 1 -(1-r_squared) * (num_data_points -1) / (num_data_points - num_input_vars - 1)
+print(adjusted_r_squared)
+>>> 0.7535635576213859
+```
+Finally I will calculate the coefficients for each input variable, which is essentially its weighting.
+
+```ruby
+coefficients = pd.DataFrame(regressor.coef_)
+input_variable_names = pd.DataFrame(X_train.columns)
+summary_stats = pd.concat([input_variable_names,coefficients], axis=1)
+summary_stats.columns = ["input_variable", "coefficient"]
+>>> 	distance_from_store	-0.20123171509921695
+```
+This shows that the distance from store has a significant impact. It shows for every extra mile the customer is further away the loyalty score will reduce by 0.2 (20%). This makes sense as the further they are away from this store would imply they are closer to another one and do most shopping there.
+
+I have also calculated the intercept value for the model, which would complete the information for the plane of best fit along with the coefficients above.
+
+```ruby
+regressor.intercept_
+>>> 0.5160974174646146
+```
+
+
 I will be using Random Forests for Regression to predict loyalty scores. The following packages will be imported to build the model.
 
 ```ruby
