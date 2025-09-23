@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Predicting Customer Signup Rates Using Classification techniques
+title: Predicting Customer Sign up Rates Using Classification techniques
 image: "/posts/ofm-new-customer-campaign.jpg"
 tags: [Python, Machine Learning, Decision Tree Classification, Random Forest Classification, Logistic Regression, K-Nearest-Neighbours (KNN) for Classification]
 ---
