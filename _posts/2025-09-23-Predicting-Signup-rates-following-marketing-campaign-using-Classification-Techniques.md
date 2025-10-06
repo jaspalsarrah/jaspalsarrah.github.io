@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Predicting whether a Customer is likely to sign up to promotion following marketing campaign Using Classification techniques
+title: Enhancing Targeting Accuracy Using Machine Learning
 image: "/posts/ofm-new-customer-campaign.jpg"
 tags: [Python, Machine Learning, Decision Tree Classification, Random Forest Classification, Logistic Regression, K-Nearest-Neighbours (KNN) for Classification]
 ---
