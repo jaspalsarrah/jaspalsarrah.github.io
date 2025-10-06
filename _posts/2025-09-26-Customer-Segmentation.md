@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Segmenting customers based on differences in grocery shopping
+title: The "You Are What You Eat" Customer Segmentation
 image: "/posts/Customer-Segmentation-cover.jpg"
 tags: [Python, Machine Learning, Unsupervised learning, K-Means Clustering]
 ---
