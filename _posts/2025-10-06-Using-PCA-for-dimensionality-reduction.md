@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Using PCA to predict whether customers will purchase a particular music album
+title: Compressing Feature Space For Classification Using PCA
 image: "/posts/pca.jpg"
 tags: [Python, Machine Learning, Principal Component Analysis, Random Forest, Classification]
 ---
