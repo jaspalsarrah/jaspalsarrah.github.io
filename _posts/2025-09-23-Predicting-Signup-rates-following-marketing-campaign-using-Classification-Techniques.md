@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Enhancing Targeting Accuracy Using Machine Learning
-image: "/posts/ofm-new-customer-campaign.jpg"
+image: "/posts/classification.jpg"
 tags: [Python, Machine Learning, Decision Tree Classification, Random Forest Classification, Logistic Regression, K-Nearest-Neighbours (KNN) for Classification]
 ---
 
